@@ -1,6 +1,6 @@
 {
   "ext.displayName": "TXT Comment Reader",
-  "ext.description": "Read local txt files in marked comment lines inside VS Code.",
+  "ext.description": "在代码注释行中分页阅读本地 TXT 文本，支持智能断句、大纲跳转和快捷翻页。",
   "config.title": "TXT Comment Reader",
   "config.markerToken": "Marker token used to identify target comment lines in the active code file.",
   "config.fallbackLineCommentPrefix": "Line comment prefix used when the active language cannot be recognized.",

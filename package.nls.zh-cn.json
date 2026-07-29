@@ -1,6 +1,6 @@
 {
   "ext.displayName": "TXT 注释阅读器",
-  "ext.description": "在 VS Code 当前代码文件的标记注释行中阅读本地 txt 文本。",
+  "ext.description": "在代码注释行中分页阅读本地 TXT 文本，支持智能断句、大纲跳转和快捷翻页。",
   "config.title": "TXT 注释阅读器",
   "config.markerToken": "用于识别当前代码文件中目标注释行的标记。",
   "config.fallbackLineCommentPrefix": "当前语言无法识别时使用的行注释前缀。",

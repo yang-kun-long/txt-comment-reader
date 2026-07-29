@@ -2,9 +2,22 @@
   "name": "txt-comment-reader",
   "displayName": "%ext.displayName%",
   "description": "%ext.description%",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "MIT",
   "publisher": "yangkunlong",
+  "icon": "resources/icon.png",
+  "keywords": [
+    "txt",
+    "reader",
+    "comment",
+    "text",
+    "outline",
+    "阅读",
+    "注释",
+    "文本",
+    "大纲",
+    "翻页"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/yang-kun-long/txt-comment-reader.git"
