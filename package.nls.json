@@ -1,0 +1,22 @@
+{
+  "ext.displayName": "TXT Novel Comments",
+  "ext.description": "Display txt novels in code comment slots inside VS Code.",
+  "config.title": "TXT Novel Viewer",
+  "config.markerToken": "Marker token used to identify comment slots in the active code file.",
+  "config.fallbackLineCommentPrefix": "Line comment prefix used when the active language cannot be recognized.",
+  "config.showStatusBar": "Show TXT Novel Viewer controls in the status bar.",
+  "config.smartSplit": "Split novel text into readable chunks before filling marker slots.",
+  "config.maxCharsPerSlot": "Maximum characters per marker slot when smart splitting is enabled.",
+  "command.openNovel": "TXT Novel Viewer: Open TXT Novel",
+  "command.reopenLast": "TXT Novel Viewer: Reopen Last Novel",
+  "command.showChapters": "TXT Novel Viewer: Show Chapter List",
+  "command.refreshChapters": "TXT Novel Viewer: Refresh Chapter List",
+  "command.nextPage": "TXT Novel Viewer: Next Page",
+  "command.prevPage": "TXT Novel Viewer: Previous Page",
+  "command.prevChapter": "TXT Novel Viewer: Previous Chapter",
+  "command.nextChapter": "TXT Novel Viewer: Next Chapter",
+  "command.setToken": "TXT Novel Viewer: Set Marker Token",
+  "command.initSlots": "TXT Novel Viewer: Initialize Marker Slots",
+  "command.toggleCompactMode": "TXT Novel Viewer: Toggle Compact Mode",
+  "view.chapters": "Novel Outline"
+}

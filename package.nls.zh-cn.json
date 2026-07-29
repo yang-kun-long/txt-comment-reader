@@ -1,0 +1,22 @@
+{
+  "ext.displayName": "TXT 小说注释阅读器",
+  "ext.description": "把 txt 小说内容显示到 VS Code 当前代码文件的注释槽里。",
+  "config.title": "TXT 小说阅读器",
+  "config.markerToken": "用于识别当前代码文件中注释槽的暗号。",
+  "config.fallbackLineCommentPrefix": "当前语言无法识别时使用的行注释前缀。",
+  "config.showStatusBar": "是否在状态栏显示 TXT 小说阅读器按钮。",
+  "config.smartSplit": "是否在填充前把小说切成更适合阅读的短句片段。",
+  "config.maxCharsPerSlot": "开启智能断句时，每个注释槽允许的最大字符数。",
+  "command.openNovel": "TXT 小说阅读器：打开 TXT 小说",
+  "command.reopenLast": "TXT 小说阅读器：重新打开上次小说",
+  "command.showChapters": "TXT 小说阅读器：显示目录",
+  "command.refreshChapters": "TXT 小说阅读器：刷新目录",
+  "command.nextPage": "TXT 小说阅读器：下一页",
+  "command.prevPage": "TXT 小说阅读器：上一页",
+  "command.prevChapter": "TXT 小说阅读器：上一章",
+  "command.nextChapter": "TXT 小说阅读器：下一章",
+  "command.setToken": "TXT 小说阅读器：设置暗号",
+  "command.initSlots": "TXT 小说阅读器：初始化插槽",
+  "command.toggleCompactMode": "TXT 小说阅读器：切换紧凑模式",
+  "view.chapters": "小说目录"
+}

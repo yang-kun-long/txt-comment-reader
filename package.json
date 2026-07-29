@@ -1,0 +1,186 @@
+{
+  "name": "txt-novel-comments",
+  "displayName": "%ext.displayName%",
+  "description": "%ext.description%",
+  "version": "0.0.1",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished",
+    "onView:txtNovelViewer.chapters",
+    "onCommand:txtNovelViewer.openNovel",
+    "onCommand:txtNovelViewer.reopenLast",
+    "onCommand:txtNovelViewer.showChapters",
+    "onCommand:txtNovelViewer.refreshChapters",
+    "onCommand:txtNovelViewer.openChapter",
+    "onCommand:txtNovelViewer.nextPage",
+    "onCommand:txtNovelViewer.prevPage",
+    "onCommand:txtNovelViewer.prevChapter",
+    "onCommand:txtNovelViewer.nextChapter",
+    "onCommand:txtNovelViewer.setToken",
+    "onCommand:txtNovelViewer.initSlots",
+    "onCommand:txtNovelViewer.toggleCompactMode"
+  ],
+  "main": "./extension.js",
+  "contributes": {
+    "configuration": {
+      "title": "%config.title%",
+      "properties": {
+        "txtNovelViewer.markerToken": {
+          "type": "string",
+          "default": "◆",
+          "description": "%config.markerToken%"
+        },
+        "txtNovelViewer.fallbackLineCommentPrefix": {
+          "type": "string",
+          "default": "//",
+          "description": "%config.fallbackLineCommentPrefix%"
+        },
+        "txtNovelViewer.showStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.showStatusBar%"
+        },
+        "txtNovelViewer.smartSplit": {
+          "type": "boolean",
+          "default": true,
+          "description": "%config.smartSplit%"
+        },
+        "txtNovelViewer.maxCharsPerSlot": {
+          "type": "integer",
+          "default": 48,
+          "minimum": 8,
+          "maximum": 200,
+          "description": "%config.maxCharsPerSlot%"
+        }
+      }
+    },
+    "commands": [
+      {
+        "command": "txtNovelViewer.openNovel",
+        "title": "%command.openNovel%"
+      },
+      {
+        "command": "txtNovelViewer.reopenLast",
+        "title": "%command.reopenLast%"
+      },
+      {
+        "command": "txtNovelViewer.showChapters",
+        "title": "%command.showChapters%"
+      },
+      {
+        "command": "txtNovelViewer.refreshChapters",
+        "title": "%command.refreshChapters%"
+      },
+      {
+        "command": "txtNovelViewer.nextPage",
+        "title": "%command.nextPage%"
+      },
+      {
+        "command": "txtNovelViewer.prevPage",
+        "title": "%command.prevPage%"
+      },
+      {
+        "command": "txtNovelViewer.prevChapter",
+        "title": "%command.prevChapter%"
+      },
+      {
+        "command": "txtNovelViewer.nextChapter",
+        "title": "%command.nextChapter%"
+      },
+      {
+        "command": "txtNovelViewer.setToken",
+        "title": "%command.setToken%"
+      },
+      {
+        "command": "txtNovelViewer.initSlots",
+        "title": "%command.initSlots%"
+      },
+      {
+        "command": "txtNovelViewer.toggleCompactMode",
+        "title": "%command.toggleCompactMode%"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "txtNovelViewer.chapters",
+          "name": "%view.chapters%",
+          "when": "!txtNovelViewer.compactMode"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "txtNovelViewer.openNovel",
+        "key": "ctrl+k 1",
+        "mac": "cmd+k 1",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "txtNovelViewer.reopenLast",
+        "key": "ctrl+k 2",
+        "mac": "cmd+k 2",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "txtNovelViewer.prevPage",
+        "key": "ctrl+k 3",
+        "mac": "cmd+k 3",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "txtNovelViewer.prevChapter",
+        "key": "ctrl+k 9",
+        "mac": "cmd+k 9",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "txtNovelViewer.nextPage",
+        "key": "ctrl+k 4",
+        "mac": "cmd+k 4",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "txtNovelViewer.showChapters",
+        "key": "ctrl+k 5",
+        "mac": "cmd+k 5",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "txtNovelViewer.refreshChapters",
+        "key": "ctrl+k 6",
+        "mac": "cmd+k 6"
+      },
+      {
+        "command": "txtNovelViewer.setToken",
+        "key": "ctrl+k 7",
+        "mac": "cmd+k 7",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "txtNovelViewer.initSlots",
+        "key": "ctrl+k 8",
+        "mac": "cmd+k 8",
+        "when": "editorTextFocus"
+      },
+      {
+        "command": "txtNovelViewer.toggleCompactMode",
+        "key": "ctrl+k 0",
+        "mac": "cmd+k 0",
+        "when": "editorTextFocus"
+      }
+    ]
+  },
+  "scripts": {
+    "lint": "node --check extension.js",
+    "test": "node test/split.test.js"
+  },
+  "devDependencies": {},
+  "dependencies": {}
+}
