@@ -15,10 +15,9 @@
 
 ## 快速开始
 
-1. 用 VS Code 打开本项目，按 `F5` 启动扩展调试
-2. 在代码文件里选中几行，执行 `TXT 小说阅读器：初始化插槽`
-3. 执行 `TXT 小说阅读器：打开 TXT 小说`
-4. 用状态栏按钮、快捷键或目录继续阅读
+1. 在代码文件里选中几行，执行 `TXT 小说阅读器：初始化插槽`
+2. 执行 `TXT 小说阅读器：打开 TXT 小说`
+3. 用状态栏按钮、快捷键或目录继续阅读
 
 ## 状态栏
 
@@ -92,3 +91,15 @@ macOS 对应为 `Cmd+K 1` 到 `Cmd+K 9`，以及 `Cmd+K 0`。
 
 ![设置项](docs/images/03-settings.png)
 
+## 开发
+
+1. 用 VS Code 打开本项目，按 `F5` 启动扩展调试
+2. 运行 `npm test`
+3. 运行 `npm run lint`
+
+## 发布
+
+1. 准备 `README.md`、`CHANGELOG.md` 和图标
+2. 如需开源许可，再补 `LICENSE`
+3. 使用 `vsce package` 打包
+4. 使用 `vsce publish` 发布到 Marketplace
