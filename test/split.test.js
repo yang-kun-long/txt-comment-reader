@@ -8,6 +8,9 @@ Module._load = function load(request, parent, isMain) {
       workspace: {
         getConfiguration() {
           return {
+            inspect() {
+              return {};
+            },
             get(key, fallback) {
               const values = {
                 smartSplit: true,

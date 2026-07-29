@@ -4,7 +4,11 @@ const path = require("path");
 const vscode = require("vscode");
 
 const STATE_KEY = "txtCommentReader.state";
+const LEGACY_STATE_KEY = "txtNovelComments.state";
 const FOCUS_MODE_KEY = "txtCommentReader.focusMode";
+const LEGACY_FOCUS_MODE_KEY = "txtNovelComments.compactMode";
+const PROGRESS_PREFIX = "txtCommentReader.progress.";
+const LEGACY_PROGRESS_PREFIX = "txtNovelComments.progress.";
 const DEFAULT_TOKEN = "◆";
 const DEFAULT_MAX_CHARS = 48;
 
@@ -111,26 +115,48 @@ function getConfig() {
   return vscode.workspace.getConfiguration("txtCommentReader");
 }
 
+function hasConfiguredValue(inspected) {
+  return Boolean(
+    inspected &&
+      (inspected.globalValue !== undefined ||
+        inspected.workspaceValue !== undefined ||
+        inspected.workspaceFolderValue !== undefined ||
+        inspected.globalLanguageValue !== undefined ||
+        inspected.workspaceLanguageValue !== undefined ||
+        inspected.workspaceFolderLanguageValue !== undefined)
+  );
+}
+
+function getConfiguredValue(key, defaultValue) {
+  const config = getConfig();
+  if (hasConfiguredValue(config.inspect(key))) {
+    return config.get(key, defaultValue);
+  }
+
+  const legacyValue = vscode.workspace.getConfiguration("txtNovelViewer").get(key);
+  return legacyValue === undefined ? config.get(key, defaultValue) : legacyValue;
+}
+
 function getConfiguredToken() {
-  const token = getConfig().get("markerToken", DEFAULT_TOKEN);
+  const token = getConfiguredValue("markerToken", DEFAULT_TOKEN);
   return typeof token === "string" && token.trim() ? token.trim() : DEFAULT_TOKEN;
 }
 
 function getFallbackLineCommentPrefix() {
-  const prefix = getConfig().get("fallbackLineCommentPrefix", "//");
+  const prefix = getConfiguredValue("fallbackLineCommentPrefix", "//");
   return typeof prefix === "string" && prefix.trim() ? prefix.trim() : "//";
 }
 
 function shouldShowStatusBar() {
-  return getConfig().get("showStatusBar", true);
+  return getConfiguredValue("showStatusBar", true);
 }
 
 function shouldSmartSplit() {
-  return getConfig().get("smartSplit", true);
+  return getConfiguredValue("smartSplit", true);
 }
 
 function getMaxCharsPerLine() {
-  const value = getConfig().get("maxCharsPerLine", DEFAULT_MAX_CHARS);
+  const value = getConfiguredValue("maxCharsPerLine", DEFAULT_MAX_CHARS);
   if (!Number.isInteger(value)) {
     return DEFAULT_MAX_CHARS;
   }
@@ -148,13 +174,35 @@ function isChapterLine(line) {
 }
 
 function getState(context) {
-  return context.workspaceState.get(STATE_KEY, {
+  const currentState = context.workspaceState.get(STATE_KEY);
+  if (currentState && typeof currentState === "object") {
+    return {
+      filePath: "",
+      ...currentState,
+    };
+  }
+
+  const legacyState = context.workspaceState.get(LEGACY_STATE_KEY);
+  if (legacyState && typeof legacyState === "object") {
+    return {
+      filePath: "",
+      ...legacyState,
+    };
+  }
+
+  return {
     filePath: "",
-  });
+  };
 }
 
 function getFocusMode(context) {
-  return context.workspaceState.get(FOCUS_MODE_KEY, false);
+  const focusMode = context.workspaceState.get(FOCUS_MODE_KEY);
+  if (typeof focusMode === "boolean") {
+    return focusMode;
+  }
+
+  const legacyFocusMode = context.workspaceState.get(LEGACY_FOCUS_MODE_KEY);
+  return typeof legacyFocusMode === "boolean" ? legacyFocusMode : false;
 }
 
 async function setState(context, nextState) {
@@ -384,9 +432,12 @@ async function loadTextIndex(filePath) {
   return buildTextIndex(content);
 }
 
-function createPlaceholderTreeItem(label) {
+function createPlaceholderTreeItem(label, command) {
   const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.None);
   item.contextValue = "placeholder";
+  if (command) {
+    item.command = command;
+  }
   return item;
 }
 
@@ -408,7 +459,12 @@ class ChapterTreeProvider {
   async getChildren() {
     const state = getState(this.context);
     if (!state.filePath) {
-      return [createPlaceholderTreeItem("先选择 txt 文件")];
+      return [
+        createPlaceholderTreeItem("先选择 txt 文件", {
+          command: "txtCommentReader.openText",
+          title: "打开 TXT 文件",
+        }),
+      ];
     }
 
     try {
@@ -444,14 +500,27 @@ function buildCommentLine(style, token, text, indent) {
   return `${indent}${style.prefix} ${token}:${suffix}`;
 }
 
-function getProgressKey(document, filePath) {
+function getProgressHash(document, filePath) {
   const raw = `${document.uri.toString()}|${filePath}`;
-  const hash = crypto.createHash("sha1").update(raw).digest("hex");
-  return `txtCommentReader.progress.${hash}`;
+  return crypto.createHash("sha1").update(raw).digest("hex");
+}
+
+function getProgressKey(document, filePath) {
+  return `${PROGRESS_PREFIX}${getProgressHash(document, filePath)}`;
+}
+
+function getLegacyProgressKey(document, filePath) {
+  return `${LEGACY_PROGRESS_PREFIX}${getProgressHash(document, filePath)}`;
 }
 
 function getSavedPage(context, document, filePath) {
-  return context.workspaceState.get(getProgressKey(document, filePath), 0);
+  const savedPage = context.workspaceState.get(getProgressKey(document, filePath));
+  if (Number.isInteger(savedPage)) {
+    return savedPage;
+  }
+
+  const legacySavedPage = context.workspaceState.get(getLegacyProgressKey(document, filePath));
+  return Number.isInteger(legacySavedPage) ? legacySavedPage : 0;
 }
 
 async function setSavedPage(context, document, filePath, page) {
@@ -564,9 +633,8 @@ async function openText(context, chapterTreeProvider) {
   await setState(context, {
     filePath,
   });
-  await setSavedPage(context, editor.document, filePath, 0);
   chapterTreeProvider.refresh();
-  await renderPage(context, 0, !getFocusMode(context));
+  await renderPage(context, getSavedPage(context, editor.document, filePath), !getFocusMode(context));
 }
 
 async function reopenLast(context) {
