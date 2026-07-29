@@ -2,7 +2,7 @@
 .github/**
 .vscode/**
 test/**
-docs/images/**
+docs/images/03-settings.png
 .gitignore
 *.vsix
 npm-debug.log
