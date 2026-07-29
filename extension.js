@@ -3,8 +3,8 @@ const crypto = require("crypto");
 const path = require("path");
 const vscode = require("vscode");
 
-const STATE_KEY = "txtNovelComments.state";
-const COMPACT_MODE_KEY = "txtNovelComments.compactMode";
+const STATE_KEY = "txtCommentReader.state";
+const FOCUS_MODE_KEY = "txtCommentReader.focusMode";
 const DEFAULT_TOKEN = "◆";
 const DEFAULT_MAX_CHARS = 48;
 
@@ -108,7 +108,7 @@ function escapeRegExp(text) {
 }
 
 function getConfig() {
-  return vscode.workspace.getConfiguration("txtNovelViewer");
+  return vscode.workspace.getConfiguration("txtCommentReader");
 }
 
 function getConfiguredToken() {
@@ -129,8 +129,8 @@ function shouldSmartSplit() {
   return getConfig().get("smartSplit", true);
 }
 
-function getMaxCharsPerSlot() {
-  const value = getConfig().get("maxCharsPerSlot", DEFAULT_MAX_CHARS);
+function getMaxCharsPerLine() {
+  const value = getConfig().get("maxCharsPerLine", DEFAULT_MAX_CHARS);
   if (!Number.isInteger(value)) {
     return DEFAULT_MAX_CHARS;
   }
@@ -153,8 +153,8 @@ function getState(context) {
   });
 }
 
-function getCompactMode(context) {
-  return context.workspaceState.get(COMPACT_MODE_KEY, false);
+function getFocusMode(context) {
+  return context.workspaceState.get(FOCUS_MODE_KEY, false);
 }
 
 async function setState(context, nextState) {
@@ -164,15 +164,15 @@ async function setState(context, nextState) {
   });
 }
 
-async function setCompactMode(context, compactMode) {
-  await context.workspaceState.update(COMPACT_MODE_KEY, compactMode);
-  await vscode.commands.executeCommand("setContext", "txtNovelViewer.compactMode", compactMode);
+async function setFocusMode(context, focusMode) {
+  await context.workspaceState.update(FOCUS_MODE_KEY, focusMode);
+  await vscode.commands.executeCommand("setContext", "txtCommentReader.focusMode", focusMode);
 }
 
 function getActiveEditor() {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
-    vscode.window.showInformationMessage("先打开一个代码文件，再运行小说注释命令。");
+    vscode.window.showInformationMessage("先打开一个代码文件，再运行 TXT 注释阅读器命令。");
     return null;
   }
 
@@ -334,7 +334,7 @@ function smartSplitLine(line, maxChars) {
   return packPieces(pieces, maxChars);
 }
 
-function buildNovelIndex(content) {
+function buildTextIndex(content) {
   const rawLines = content
     .replace(/\r\n/g, "\n")
     .split("\n")
@@ -343,7 +343,7 @@ function buildNovelIndex(content) {
 
   const segments = [];
   const chapters = [];
-  const maxChars = getMaxCharsPerSlot();
+  const maxChars = getMaxCharsPerLine();
   const useSmartSplit = shouldSmartSplit();
 
   for (const line of rawLines) {
@@ -365,8 +365,8 @@ function buildNovelIndex(content) {
   };
 }
 
-function readNovelLines(content) {
-  const index = buildNovelIndex(content);
+function readTextLines(content) {
+  const index = buildTextIndex(content);
   if (!shouldSmartSplit()) {
     return index.segments;
   }
@@ -374,14 +374,14 @@ function readNovelLines(content) {
   return index.segments;
 }
 
-async function loadNovelLines(filePath) {
+async function loadTextLines(filePath) {
   const content = await fs.readFile(filePath, "utf8");
-  return readNovelLines(content);
+  return readTextLines(content);
 }
 
-async function loadNovelIndex(filePath) {
+async function loadTextIndex(filePath) {
   const content = await fs.readFile(filePath, "utf8");
-  return buildNovelIndex(content);
+  return buildTextIndex(content);
 }
 
 function createPlaceholderTreeItem(label) {
@@ -408,11 +408,11 @@ class ChapterTreeProvider {
   async getChildren() {
     const state = getState(this.context);
     if (!state.filePath) {
-      return [createPlaceholderTreeItem("先选择 txt 小说文件")];
+      return [createPlaceholderTreeItem("先选择 txt 文件")];
     }
 
     try {
-      const index = await loadNovelIndex(state.filePath);
+      const index = await loadTextIndex(state.filePath);
       if (index.chapters.length === 0) {
         return [createPlaceholderTreeItem("未识别到章节目录")];
       }
@@ -422,7 +422,7 @@ class ChapterTreeProvider {
         item.description = `${chapterIndex + 1}`;
         item.tooltip = chapter.title;
         item.command = {
-          command: "txtNovelViewer.openChapter",
+          command: "txtCommentReader.openChapter",
           title: "跳转章节",
           arguments: [chapterIndex],
         };
@@ -447,7 +447,7 @@ function buildCommentLine(style, token, text, indent) {
 function getProgressKey(document, filePath) {
   const raw = `${document.uri.toString()}|${filePath}`;
   const hash = crypto.createHash("sha1").update(raw).digest("hex");
-  return `txtNovelComments.progress.${hash}`;
+  return `txtCommentReader.progress.${hash}`;
 }
 
 function getSavedPage(context, document, filePath) {
@@ -495,7 +495,7 @@ async function renderPage(context, requestedPage, visibleContent = true) {
 
   const state = getState(context);
   if (!state.filePath) {
-    vscode.window.showInformationMessage("还没有选择 txt 小说文件。");
+    vscode.window.showInformationMessage("还没有选择 txt 文件。");
     return;
   }
 
@@ -503,37 +503,37 @@ async function renderPage(context, requestedPage, visibleContent = true) {
   const style = getCommentStyle(editor.document);
   const markers = findMarkerLines(editor.document, style, token);
   if (markers.length === 0) {
-    vscode.window.showInformationMessage(`当前文件没有暗号注释行。示例: ${getMarkerExample(style, token)}`);
+    vscode.window.showInformationMessage(`当前文件没有目标注释行。示例: ${getMarkerExample(style, token)}`);
     return;
   }
 
-  const novelIndex = await loadNovelIndex(state.filePath);
-  const novelLines = novelIndex.segments;
-  if (novelLines.length === 0) {
+  const textIndex = await loadTextIndex(state.filePath);
+  const textLines = textIndex.segments;
+  if (textLines.length === 0) {
     vscode.window.showInformationMessage("txt 文件没有可显示的非空行。");
     return;
   }
 
-  const totalPages = Math.max(1, Math.ceil(novelLines.length / markers.length));
+  const totalPages = Math.max(1, Math.ceil(textLines.length / markers.length));
   const nextPage = Math.max(0, Math.min(totalPages - 1, requestedPage));
   const start = nextPage * markers.length;
-  const pageLines = visibleContent ? novelLines.slice(start, start + markers.length) : markers.map(() => "");
+  const pageLines = visibleContent ? textLines.slice(start, start + markers.length) : markers.map(() => "");
   const ok = await replaceMarkerLines(editor, markers, style, token, pageLines);
 
   if (!ok) {
-    vscode.window.showErrorMessage("更新暗号注释行失败。");
+    vscode.window.showErrorMessage("更新目标注释行失败。");
     return;
   }
 
   await setSavedPage(context, editor.document, state.filePath, nextPage);
   await setState(context, {
     totalPages,
-    slots: markers.length,
+    targetLines: markers.length,
   });
   vscode.window.setStatusBarMessage(
     visibleContent
-      ? `TXT Novel Comments: ${nextPage + 1}/${totalPages} 页，${markers.length} 行`
-      : `TXT Novel Comments: 已隐藏小说内容`,
+      ? `TXT Comment Reader: ${nextPage + 1}/${totalPages} 页，${markers.length} 行`
+      : `TXT Comment Reader: 已清空目标注释行内容`,
     2500
   );
 }
@@ -544,13 +544,13 @@ async function pickTxtFile() {
     filters: {
       Text: ["txt"],
     },
-    title: "选择小说 txt 文件",
+    title: "选择 txt 文件",
   });
 
   return picked?.[0]?.fsPath || "";
 }
 
-async function openNovel(context, chapterTreeProvider) {
+async function openText(context, chapterTreeProvider) {
   const editor = getActiveEditor();
   if (!editor) {
     return;
@@ -566,13 +566,13 @@ async function openNovel(context, chapterTreeProvider) {
   });
   await setSavedPage(context, editor.document, filePath, 0);
   chapterTreeProvider.refresh();
-  await renderPage(context, 0, !getCompactMode(context));
+  await renderPage(context, 0, !getFocusMode(context));
 }
 
 async function reopenLast(context) {
   const state = getState(context);
   if (!state.filePath) {
-    vscode.window.showInformationMessage("还没有打开过 txt 小说文件。");
+    vscode.window.showInformationMessage("还没有打开过 txt 文件。");
     return;
   }
 
@@ -581,7 +581,7 @@ async function reopenLast(context) {
     return;
   }
 
-  await renderPage(context, getSavedPage(context, editor.document, state.filePath), !getCompactMode(context));
+  await renderPage(context, getSavedPage(context, editor.document, state.filePath), !getFocusMode(context));
 }
 
 async function openChapter(context, chapterIndex) {
@@ -592,7 +592,7 @@ async function openChapter(context, chapterIndex) {
 
   const state = getState(context);
   if (!state.filePath) {
-    vscode.window.showInformationMessage("还没有选择 txt 小说文件。");
+    vscode.window.showInformationMessage("还没有选择 txt 文件。");
     return;
   }
 
@@ -600,19 +600,19 @@ async function openChapter(context, chapterIndex) {
   const style = getCommentStyle(editor.document);
   const markers = findMarkerLines(editor.document, style, token);
   if (markers.length === 0) {
-    vscode.window.showInformationMessage(`当前文件没有暗号注释行。示例: ${getMarkerExample(style, token)}`);
+    vscode.window.showInformationMessage(`当前文件没有目标注释行。示例: ${getMarkerExample(style, token)}`);
     return;
   }
 
-  const novelIndex = await loadNovelIndex(state.filePath);
-  const chapter = novelIndex.chapters[chapterIndex];
+  const textIndex = await loadTextIndex(state.filePath);
+  const chapter = textIndex.chapters[chapterIndex];
   if (!chapter) {
     vscode.window.showInformationMessage("章节不存在，目录可能需要刷新。");
     return;
   }
 
   const page = getChapterPage(chapter, markers.length);
-  await renderPage(context, page, !getCompactMode(context));
+  await renderPage(context, page, !getFocusMode(context));
 }
 
 async function openPreviousChapter(context) {
@@ -623,7 +623,7 @@ async function openPreviousChapter(context) {
 
   const state = getState(context);
   if (!state.filePath) {
-    vscode.window.showInformationMessage("还没有选择 txt 小说文件。");
+    vscode.window.showInformationMessage("还没有选择 txt 文件。");
     return;
   }
 
@@ -631,21 +631,21 @@ async function openPreviousChapter(context) {
   const style = getCommentStyle(editor.document);
   const markers = findMarkerLines(editor.document, style, token);
   if (markers.length === 0) {
-    vscode.window.showInformationMessage(`当前文件没有暗号注释行。示例: ${getMarkerExample(style, token)}`);
+    vscode.window.showInformationMessage(`当前文件没有目标注释行。示例: ${getMarkerExample(style, token)}`);
     return;
   }
 
-  const novelIndex = await loadNovelIndex(state.filePath);
+  const textIndex = await loadTextIndex(state.filePath);
   const currentPage = getSavedPage(context, editor.document, state.filePath);
-  const currentChapterIndex = getChapterIndexForPage(novelIndex.chapters, currentPage, markers.length);
+  const currentChapterIndex = getChapterIndexForPage(textIndex.chapters, currentPage, markers.length);
   if (currentChapterIndex <= 0) {
     vscode.window.showInformationMessage("已经是第一章。");
     return;
   }
 
-  const chapter = novelIndex.chapters[currentChapterIndex - 1];
+  const chapter = textIndex.chapters[currentChapterIndex - 1];
   const page = getChapterPage(chapter, markers.length);
-  await renderPage(context, page, !getCompactMode(context));
+  await renderPage(context, page, !getFocusMode(context));
 }
 
 async function openNextChapter(context) {
@@ -656,7 +656,7 @@ async function openNextChapter(context) {
 
   const state = getState(context);
   if (!state.filePath) {
-    vscode.window.showInformationMessage("还没有选择 txt 小说文件。");
+    vscode.window.showInformationMessage("还没有选择 txt 文件。");
     return;
   }
 
@@ -664,28 +664,28 @@ async function openNextChapter(context) {
   const style = getCommentStyle(editor.document);
   const markers = findMarkerLines(editor.document, style, token);
   if (markers.length === 0) {
-    vscode.window.showInformationMessage(`当前文件没有暗号注释行。示例: ${getMarkerExample(style, token)}`);
+    vscode.window.showInformationMessage(`当前文件没有目标注释行。示例: ${getMarkerExample(style, token)}`);
     return;
   }
 
-  const novelIndex = await loadNovelIndex(state.filePath);
+  const textIndex = await loadTextIndex(state.filePath);
   const currentPage = getSavedPage(context, editor.document, state.filePath);
-  const currentChapterIndex = getChapterIndexForPage(novelIndex.chapters, currentPage, markers.length);
+  const currentChapterIndex = getChapterIndexForPage(textIndex.chapters, currentPage, markers.length);
   const nextChapterIndex = currentChapterIndex < 0 ? 0 : currentChapterIndex + 1;
-  if (nextChapterIndex >= novelIndex.chapters.length) {
+  if (nextChapterIndex >= textIndex.chapters.length) {
     vscode.window.showInformationMessage("已经是最后一章。");
     return;
   }
 
-  const chapter = novelIndex.chapters[nextChapterIndex];
+  const chapter = textIndex.chapters[nextChapterIndex];
   const page = getChapterPage(chapter, markers.length);
-  await renderPage(context, page, !getCompactMode(context));
+  await renderPage(context, page, !getFocusMode(context));
 }
 
 async function showChapters(context, chapterTreeProvider, statusBar) {
-  if (getCompactMode(context)) {
-    await setCompactMode(context, false);
-    updateStatusBarItems(statusBar.items, statusBar.compactItem, false);
+  if (getFocusMode(context)) {
+    await setFocusMode(context, false);
+    updateStatusBarItems(statusBar.items, statusBar.focusItem, false);
 
     const state = getState(context);
     const editor = vscode.window.activeTextEditor;
@@ -697,7 +697,7 @@ async function showChapters(context, chapterTreeProvider, statusBar) {
   chapterTreeProvider.refresh();
   await vscode.commands.executeCommand("workbench.view.explorer");
   try {
-    await vscode.commands.executeCommand("txtNovelViewer.chapters.focus");
+    await vscode.commands.executeCommand("txtCommentReader.chapters.focus");
   } catch {
     // The focus command is provided by VS Code for contributed views in recent versions.
   }
@@ -707,28 +707,28 @@ async function nextPage(context) {
   const state = getState(context);
   const editor = getActiveEditor();
   if (!editor || !state.filePath) {
-    await renderPage(context, 0, !getCompactMode(context));
+    await renderPage(context, 0, !getFocusMode(context));
     return;
   }
 
-  await renderPage(context, getSavedPage(context, editor.document, state.filePath) + 1, !getCompactMode(context));
+  await renderPage(context, getSavedPage(context, editor.document, state.filePath) + 1, !getFocusMode(context));
 }
 
 async function prevPage(context) {
   const state = getState(context);
   const editor = getActiveEditor();
   if (!editor || !state.filePath) {
-    await renderPage(context, 0, !getCompactMode(context));
+    await renderPage(context, 0, !getFocusMode(context));
     return;
   }
 
-  await renderPage(context, getSavedPage(context, editor.document, state.filePath) - 1, !getCompactMode(context));
+  await renderPage(context, getSavedPage(context, editor.document, state.filePath) - 1, !getFocusMode(context));
 }
 
-async function toggleCompactMode(context, chapterTreeProvider, statusBarItems) {
-  const nextMode = !getCompactMode(context);
-  await setCompactMode(context, nextMode);
-  updateStatusBarItems(statusBarItems.items, statusBarItems.compactItem, nextMode);
+async function toggleFocusMode(context, chapterTreeProvider, statusBarItems) {
+  const nextMode = !getFocusMode(context);
+  await setFocusMode(context, nextMode);
+  updateStatusBarItems(statusBarItems.items, statusBarItems.focusItem, nextMode);
   chapterTreeProvider.refresh();
 
   const state = getState(context);
@@ -742,8 +742,8 @@ async function toggleCompactMode(context, chapterTreeProvider, statusBarItems) {
 
 async function setToken(context) {
   const token = await vscode.window.showInputBox({
-    title: "设置暗号",
-    prompt: "当前代码文件中，只有包含这个暗号的注释行会被替换成小说内容。",
+    title: "设置标记",
+    prompt: "当前代码文件中，只有包含这个标记的注释行会被替换为 txt 文本。",
     value: getConfiguredToken(),
     ignoreFocusOut: true,
   });
@@ -757,7 +757,7 @@ async function setToken(context) {
     ? vscode.ConfigurationTarget.Workspace
     : vscode.ConfigurationTarget.Global;
   await getConfig().update("markerToken", nextToken, target);
-  vscode.window.showInformationMessage(`暗号已设置为: ${nextToken}`);
+  vscode.window.showInformationMessage(`标记已设置为: ${nextToken}`);
 }
 
 function getLineIndexesForSelections(selections) {
@@ -778,7 +778,7 @@ function getLineIndexesForSelections(selections) {
   return [...lineIndexes].sort((a, b) => a - b);
 }
 
-async function initSlots(context) {
+async function initTargetLines(context) {
   const editor = getActiveEditor();
   if (!editor) {
     return;
@@ -797,17 +797,17 @@ async function initSlots(context) {
   });
 
   if (!ok) {
-    vscode.window.showErrorMessage("初始化暗号注释插槽失败。");
+    vscode.window.showErrorMessage("初始化目标注释行失败。");
     return;
   }
 
-  vscode.window.showInformationMessage(`已初始化 ${lineIndexes.length} 行暗号注释插槽。`);
+  vscode.window.showInformationMessage(`已初始化 ${lineIndexes.length} 行目标注释行。`);
 }
 
-function updateStatusBarItems(items, compactItem, compactMode) {
+function updateStatusBarItems(items, focusItem, focusMode) {
   const showStatusBar = shouldShowStatusBar();
-  const primaryVisible = showStatusBar && !compactMode;
-  const compactVisible = showStatusBar;
+  const primaryVisible = showStatusBar && !focusMode;
+  const focusVisible = showStatusBar;
 
   items.forEach((item) => {
     if (primaryVisible) {
@@ -817,12 +817,12 @@ function updateStatusBarItems(items, compactItem, compactMode) {
     }
   });
 
-  if (compactVisible) {
-    compactItem.text = compactMode ? "$(expand-all) 展开" : "$(collapse-all) 紧凑";
-    compactItem.tooltip = compactMode ? "退出紧凑模式" : "进入紧凑模式";
-    compactItem.show();
+  if (focusVisible) {
+    focusItem.text = focusMode ? "$(expand-all) 展开" : "$(collapse-all) 专注";
+    focusItem.tooltip = focusMode ? "退出专注模式" : "进入专注模式";
+    focusItem.show();
   } else {
-    compactItem.hide();
+    focusItem.hide();
   }
 }
 
@@ -830,67 +830,67 @@ function createStatusBarItems() {
   const prevChapterItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 104);
   prevChapterItem.text = "$(chevron-up)";
   prevChapterItem.tooltip = "上一章";
-  prevChapterItem.command = "txtNovelViewer.prevChapter";
+  prevChapterItem.command = "txtCommentReader.prevChapter";
 
   const prevItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 103);
   prevItem.text = "$(chevron-left)";
   prevItem.tooltip = "上一页";
-  prevItem.command = "txtNovelViewer.prevPage";
+  prevItem.command = "txtCommentReader.prevPage";
 
   const nextItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 102);
   nextItem.text = "$(chevron-right)";
   nextItem.tooltip = "下一页";
-  nextItem.command = "txtNovelViewer.nextPage";
+  nextItem.command = "txtCommentReader.nextPage";
 
   const nextChapterItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 101);
   nextChapterItem.text = "$(chevron-down)";
   nextChapterItem.tooltip = "下一章";
-  nextChapterItem.command = "txtNovelViewer.nextChapter";
+  nextChapterItem.command = "txtCommentReader.nextChapter";
 
   const initItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   initItem.text = "$(comment)";
-  initItem.tooltip = "把选中行初始化为暗号注释插槽";
-  initItem.command = "txtNovelViewer.initSlots";
+  initItem.tooltip = "把选中行初始化为目标注释行";
+  initItem.command = "txtCommentReader.initTargetLines";
 
-  const compactItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
-  compactItem.text = "$(collapse-all)";
-  compactItem.tooltip = "进入紧凑模式";
-  compactItem.command = "txtNovelViewer.toggleCompactMode";
+  const focusItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+  focusItem.text = "$(collapse-all)";
+  focusItem.tooltip = "进入专注模式";
+  focusItem.command = "txtCommentReader.toggleFocusMode";
 
   const items = [prevChapterItem, prevItem, nextItem, nextChapterItem, initItem];
-  return { items, compactItem };
+  return { items, focusItem };
 }
 
 async function activate(context) {
   const chapterTreeProvider = new ChapterTreeProvider(context);
   const statusBar = createStatusBarItems();
-  const compactMode = getCompactMode(context);
-  await vscode.commands.executeCommand("setContext", "txtNovelViewer.compactMode", compactMode);
+  const focusMode = getFocusMode(context);
+  await vscode.commands.executeCommand("setContext", "txtCommentReader.focusMode", focusMode);
   context.subscriptions.push(
-    vscode.window.registerTreeDataProvider("txtNovelViewer.chapters", chapterTreeProvider)
+    vscode.window.registerTreeDataProvider("txtCommentReader.chapters", chapterTreeProvider)
   );
 
   context.subscriptions.push(
-    vscode.commands.registerCommand("txtNovelViewer.openNovel", () => openNovel(context, chapterTreeProvider)),
-    vscode.commands.registerCommand("txtNovelViewer.reopenLast", () => reopenLast(context)),
-    vscode.commands.registerCommand("txtNovelViewer.openChapter", (chapterIndex) => openChapter(context, chapterIndex)),
-    vscode.commands.registerCommand("txtNovelViewer.showChapters", () => showChapters(context, chapterTreeProvider, statusBar)),
-    vscode.commands.registerCommand("txtNovelViewer.refreshChapters", () => chapterTreeProvider.refresh()),
-    vscode.commands.registerCommand("txtNovelViewer.nextPage", () => nextPage(context)),
-    vscode.commands.registerCommand("txtNovelViewer.prevPage", () => prevPage(context)),
-    vscode.commands.registerCommand("txtNovelViewer.prevChapter", () => openPreviousChapter(context)),
-    vscode.commands.registerCommand("txtNovelViewer.nextChapter", () => openNextChapter(context)),
-    vscode.commands.registerCommand("txtNovelViewer.setToken", () => setToken(context)),
-    vscode.commands.registerCommand("txtNovelViewer.initSlots", () => initSlots(context)),
-    vscode.commands.registerCommand("txtNovelViewer.toggleCompactMode", () => toggleCompactMode(context, chapterTreeProvider, statusBar))
+    vscode.commands.registerCommand("txtCommentReader.openText", () => openText(context, chapterTreeProvider)),
+    vscode.commands.registerCommand("txtCommentReader.reopenLast", () => reopenLast(context)),
+    vscode.commands.registerCommand("txtCommentReader.openChapter", (chapterIndex) => openChapter(context, chapterIndex)),
+    vscode.commands.registerCommand("txtCommentReader.showChapters", () => showChapters(context, chapterTreeProvider, statusBar)),
+    vscode.commands.registerCommand("txtCommentReader.refreshChapters", () => chapterTreeProvider.refresh()),
+    vscode.commands.registerCommand("txtCommentReader.nextPage", () => nextPage(context)),
+    vscode.commands.registerCommand("txtCommentReader.prevPage", () => prevPage(context)),
+    vscode.commands.registerCommand("txtCommentReader.prevChapter", () => openPreviousChapter(context)),
+    vscode.commands.registerCommand("txtCommentReader.nextChapter", () => openNextChapter(context)),
+    vscode.commands.registerCommand("txtCommentReader.setToken", () => setToken(context)),
+    vscode.commands.registerCommand("txtCommentReader.initTargetLines", () => initTargetLines(context)),
+    vscode.commands.registerCommand("txtCommentReader.toggleFocusMode", () => toggleFocusMode(context, chapterTreeProvider, statusBar))
   );
 
-  context.subscriptions.push(...statusBar.items, statusBar.compactItem);
-  updateStatusBarItems(statusBar.items, statusBar.compactItem, compactMode);
+  context.subscriptions.push(...statusBar.items, statusBar.focusItem);
+  updateStatusBarItems(statusBar.items, statusBar.focusItem, focusMode);
   context.subscriptions.push(
     vscode.workspace.onDidChangeConfiguration((event) => {
-      if (event.affectsConfiguration("txtNovelViewer.showStatusBar") || event.affectsConfiguration("txtNovelViewer.compactMode")) {
-        updateStatusBarItems(statusBar.items, statusBar.compactItem, getCompactMode(context));
+      if (event.affectsConfiguration("txtCommentReader.showStatusBar") || event.affectsConfiguration("txtCommentReader.focusMode")) {
+        updateStatusBarItems(statusBar.items, statusBar.focusItem, getFocusMode(context));
       }
     })
   );
@@ -902,11 +902,11 @@ module.exports = {
   activate,
   deactivate,
   _test: {
-    buildNovelIndex,
+    buildTextIndex,
     hardSplit,
     isChapterLine,
     packPieces,
-    readNovelLines,
+    readTextLines,
     smartSplitLine,
     splitByPattern,
   },

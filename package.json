@@ -1,5 +1,5 @@
 {
-  "name": "txt-novel-comments",
+  "name": "txt-comment-reader",
   "displayName": "%ext.displayName%",
   "description": "%ext.description%",
   "version": "0.0.1",
@@ -7,12 +7,12 @@
   "publisher": "yangkunlong",
   "repository": {
     "type": "git",
-    "url": "https://github.com/yang-kun-long/txt-novel-comments.git"
+    "url": "https://github.com/yang-kun-long/txt-comment-reader.git"
   },
   "bugs": {
-    "url": "https://github.com/yang-kun-long/txt-novel-comments/issues"
+    "url": "https://github.com/yang-kun-long/txt-comment-reader/issues"
   },
-  "homepage": "https://github.com/yang-kun-long/txt-novel-comments#readme",
+  "homepage": "https://github.com/yang-kun-long/txt-comment-reader#readme",
   "engines": {
     "vscode": "^1.85.0"
   },
@@ -21,165 +21,165 @@
   ],
   "activationEvents": [
     "onStartupFinished",
-    "onView:txtNovelViewer.chapters",
-    "onCommand:txtNovelViewer.openNovel",
-    "onCommand:txtNovelViewer.reopenLast",
-    "onCommand:txtNovelViewer.showChapters",
-    "onCommand:txtNovelViewer.refreshChapters",
-    "onCommand:txtNovelViewer.openChapter",
-    "onCommand:txtNovelViewer.nextPage",
-    "onCommand:txtNovelViewer.prevPage",
-    "onCommand:txtNovelViewer.prevChapter",
-    "onCommand:txtNovelViewer.nextChapter",
-    "onCommand:txtNovelViewer.setToken",
-    "onCommand:txtNovelViewer.initSlots",
-    "onCommand:txtNovelViewer.toggleCompactMode"
+    "onView:txtCommentReader.chapters",
+    "onCommand:txtCommentReader.openText",
+    "onCommand:txtCommentReader.reopenLast",
+    "onCommand:txtCommentReader.showChapters",
+    "onCommand:txtCommentReader.refreshChapters",
+    "onCommand:txtCommentReader.openChapter",
+    "onCommand:txtCommentReader.nextPage",
+    "onCommand:txtCommentReader.prevPage",
+    "onCommand:txtCommentReader.prevChapter",
+    "onCommand:txtCommentReader.nextChapter",
+    "onCommand:txtCommentReader.setToken",
+    "onCommand:txtCommentReader.initTargetLines",
+    "onCommand:txtCommentReader.toggleFocusMode"
   ],
   "main": "./extension.js",
   "contributes": {
     "configuration": {
       "title": "%config.title%",
       "properties": {
-        "txtNovelViewer.markerToken": {
+        "txtCommentReader.markerToken": {
           "type": "string",
           "default": "◆",
           "description": "%config.markerToken%"
         },
-        "txtNovelViewer.fallbackLineCommentPrefix": {
+        "txtCommentReader.fallbackLineCommentPrefix": {
           "type": "string",
           "default": "//",
           "description": "%config.fallbackLineCommentPrefix%"
         },
-        "txtNovelViewer.showStatusBar": {
+        "txtCommentReader.showStatusBar": {
           "type": "boolean",
           "default": true,
           "description": "%config.showStatusBar%"
         },
-        "txtNovelViewer.smartSplit": {
+        "txtCommentReader.smartSplit": {
           "type": "boolean",
           "default": true,
           "description": "%config.smartSplit%"
         },
-        "txtNovelViewer.maxCharsPerSlot": {
+        "txtCommentReader.maxCharsPerLine": {
           "type": "integer",
           "default": 48,
           "minimum": 8,
           "maximum": 200,
-          "description": "%config.maxCharsPerSlot%"
+          "description": "%config.maxCharsPerLine%"
         }
       }
     },
     "commands": [
       {
-        "command": "txtNovelViewer.openNovel",
-        "title": "%command.openNovel%"
+        "command": "txtCommentReader.openText",
+        "title": "%command.openText%"
       },
       {
-        "command": "txtNovelViewer.reopenLast",
+        "command": "txtCommentReader.reopenLast",
         "title": "%command.reopenLast%"
       },
       {
-        "command": "txtNovelViewer.showChapters",
+        "command": "txtCommentReader.showChapters",
         "title": "%command.showChapters%"
       },
       {
-        "command": "txtNovelViewer.refreshChapters",
+        "command": "txtCommentReader.refreshChapters",
         "title": "%command.refreshChapters%"
       },
       {
-        "command": "txtNovelViewer.nextPage",
+        "command": "txtCommentReader.nextPage",
         "title": "%command.nextPage%"
       },
       {
-        "command": "txtNovelViewer.prevPage",
+        "command": "txtCommentReader.prevPage",
         "title": "%command.prevPage%"
       },
       {
-        "command": "txtNovelViewer.prevChapter",
+        "command": "txtCommentReader.prevChapter",
         "title": "%command.prevChapter%"
       },
       {
-        "command": "txtNovelViewer.nextChapter",
+        "command": "txtCommentReader.nextChapter",
         "title": "%command.nextChapter%"
       },
       {
-        "command": "txtNovelViewer.setToken",
+        "command": "txtCommentReader.setToken",
         "title": "%command.setToken%"
       },
       {
-        "command": "txtNovelViewer.initSlots",
-        "title": "%command.initSlots%"
+        "command": "txtCommentReader.initTargetLines",
+        "title": "%command.initTargetLines%"
       },
       {
-        "command": "txtNovelViewer.toggleCompactMode",
-        "title": "%command.toggleCompactMode%"
+        "command": "txtCommentReader.toggleFocusMode",
+        "title": "%command.toggleFocusMode%"
       }
     ],
     "views": {
       "explorer": [
         {
-          "id": "txtNovelViewer.chapters",
+          "id": "txtCommentReader.chapters",
           "name": "%view.chapters%",
-          "when": "!txtNovelViewer.compactMode"
+          "when": "!txtCommentReader.focusMode"
         }
       ]
     },
     "keybindings": [
       {
-        "command": "txtNovelViewer.openNovel",
+        "command": "txtCommentReader.openText",
         "key": "ctrl+k 1",
         "mac": "cmd+k 1",
         "when": "editorTextFocus"
       },
       {
-        "command": "txtNovelViewer.reopenLast",
+        "command": "txtCommentReader.reopenLast",
         "key": "ctrl+k 2",
         "mac": "cmd+k 2",
         "when": "editorTextFocus"
       },
       {
-        "command": "txtNovelViewer.prevPage",
+        "command": "txtCommentReader.prevPage",
         "key": "ctrl+k 3",
         "mac": "cmd+k 3",
         "when": "editorTextFocus"
       },
       {
-        "command": "txtNovelViewer.prevChapter",
+        "command": "txtCommentReader.prevChapter",
         "key": "ctrl+k 9",
         "mac": "cmd+k 9",
         "when": "editorTextFocus"
       },
       {
-        "command": "txtNovelViewer.nextPage",
+        "command": "txtCommentReader.nextPage",
         "key": "ctrl+k 4",
         "mac": "cmd+k 4",
         "when": "editorTextFocus"
       },
       {
-        "command": "txtNovelViewer.showChapters",
+        "command": "txtCommentReader.showChapters",
         "key": "ctrl+k 5",
         "mac": "cmd+k 5",
         "when": "editorTextFocus"
       },
       {
-        "command": "txtNovelViewer.refreshChapters",
+        "command": "txtCommentReader.refreshChapters",
         "key": "ctrl+k 6",
         "mac": "cmd+k 6"
       },
       {
-        "command": "txtNovelViewer.setToken",
+        "command": "txtCommentReader.setToken",
         "key": "ctrl+k 7",
         "mac": "cmd+k 7",
         "when": "editorTextFocus"
       },
       {
-        "command": "txtNovelViewer.initSlots",
+        "command": "txtCommentReader.initTargetLines",
         "key": "ctrl+k 8",
         "mac": "cmd+k 8",
         "when": "editorTextFocus"
       },
       {
-        "command": "txtNovelViewer.toggleCompactMode",
+        "command": "txtCommentReader.toggleFocusMode",
         "key": "ctrl+k 0",
         "mac": "cmd+k 0",
         "when": "editorTextFocus"

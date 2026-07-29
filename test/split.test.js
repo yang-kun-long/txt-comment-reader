@@ -11,7 +11,7 @@ Module._load = function load(request, parent, isMain) {
             get(key, fallback) {
               const values = {
                 smartSplit: true,
-                maxCharsPerSlot: 12,
+                maxCharsPerLine: 12,
               };
               return Object.prototype.hasOwnProperty.call(values, key) ? values[key] : fallback;
             },
@@ -26,7 +26,7 @@ Module._load = function load(request, parent, isMain) {
 
 const { _test } = require("../extension");
 
-assert.deepStrictEqual(_test.readNovelLines("第一句。\n\n第二句！\n   \n第三句？"), [
+assert.deepStrictEqual(_test.readTextLines("第一句。\n\n第二句！\n   \n第三句？"), [
   "第一句。",
   "第二句！",
   "第三句？",
@@ -59,8 +59,8 @@ assert.strictEqual(_test.isChapterLine("第3节 暗线"), true);
 assert.strictEqual(_test.isChapterLine("Chapter 3 Return"), true);
 assert.strictEqual(_test.isChapterLine("正文里提到第一章"), false);
 
-const novelIndex = _test.buildNovelIndex("第一章 初遇\n这是第一句。第二句。\n\n第二章 离开\n下一段。");
-assert.deepStrictEqual(novelIndex.chapters, [
+const textIndex = _test.buildTextIndex("第一章 初遇\n这是第一句。第二句。\n\n第二章 离开\n下一段。");
+assert.deepStrictEqual(textIndex.chapters, [
   {
     title: "第一章 初遇",
     segmentIndex: 0,
