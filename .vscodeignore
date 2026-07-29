@@ -1,0 +1,8 @@
+.git/**
+.github/**
+.vscode/**
+test/**
+.gitignore
+*.vsix
+npm-debug.log
+yarn-error.log

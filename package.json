@@ -3,7 +3,7 @@
   "displayName": "%ext.displayName%",
   "description": "%ext.description%",
   "version": "0.0.1",
-  "publisher": "local",
+  "publisher": "yangkunlong",
   "repository": {
     "type": "git",
     "url": "https://github.com/yang-kun-long/txt-novel-comments.git"
