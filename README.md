@@ -24,6 +24,11 @@
 2. 执行 `TXT 注释阅读器：打开 TXT 文件`
 3. 用状态栏按钮、快捷键或大纲继续阅读
 
+## 安装
+
+- VS Code Marketplace：搜索 `TXT Comment Reader`
+- GitHub Releases：下载 `.vsix` 后执行 `Extensions: Install from VSIX...`
+
 ## 状态栏
 
 状态栏保留以下入口：
