@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.0.5
+
+- README 图片切换到 static.yang.team
+
 ## 0.0.4
 
 - 大纲空状态支持点击打开 TXT 文件选择

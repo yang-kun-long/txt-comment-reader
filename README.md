@@ -92,19 +92,19 @@ macOS 对应为 `Cmd+K 1` 到 `Cmd+K 9`，以及 `Cmd+K 0`。
 
 ### 目标注释行
 
-![目标注释行](docs/images/01-target-lines.png)
+![目标注释行](https://static.yang.team/txt-comment-reader/readme/01-target-lines.png)
 
 ### TXT 大纲
 
-![TXT 大纲](docs/images/02-outline.png)
+![TXT 大纲](https://static.yang.team/txt-comment-reader/readme/02-outline.png)
 
 ### 状态栏与快捷键
 
-![状态栏与快捷键](docs/images/03-controls.png)
+![状态栏与快捷键](https://static.yang.team/txt-comment-reader/readme/03-controls.png)
 
 ### 设置
 
-![设置](docs/images/04-settings.png)
+![设置](https://static.yang.team/txt-comment-reader/readme/04-settings.png)
 
 ## 开发
 
