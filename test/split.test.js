@@ -1,5 +1,8 @@
 const assert = require("assert");
+const fs = require("fs/promises");
 const Module = require("module");
+const os = require("os");
+const path = require("path");
 
 const originalLoad = Module._load;
 Module._load = function load(request, parent, isMain) {
@@ -74,4 +77,39 @@ assert.deepStrictEqual(textIndex.chapters, [
   },
 ]);
 
-console.log("split tests ok");
+(async () => {
+  const tmpFile = path.join(os.tmpdir(), `txt-comment-reader-${Date.now()}.txt`);
+  await fs.writeFile(tmpFile, "第一章 初遇\n这是第一句。第二句。\n\n第二章 离开\n下一段。", "utf8");
+
+  try {
+    const fileIndex = await _test.loadTextIndex(tmpFile);
+    assert.strictEqual(fileIndex.totalSegments, 4);
+    assert.deepStrictEqual(
+      fileIndex.chapters.map(({ title, segmentIndex }) => ({ title, segmentIndex })),
+      [
+        {
+          title: "第一章 初遇",
+          segmentIndex: 0,
+        },
+        {
+          title: "第二章 离开",
+          segmentIndex: 2,
+        },
+      ]
+    );
+
+    assert.deepStrictEqual(await _test.readSegments(tmpFile, 1, 2, fileIndex), [
+      "这是第一句。第二句。",
+      "第二章 离开",
+    ]);
+    assert.strictEqual(_test.normalizeSegmentIndex(999, fileIndex.totalSegments, 3), 3);
+    assert.strictEqual(_test.getChapterIndexForSegmentIndex(fileIndex.chapters, 3), 1);
+  } finally {
+    await fs.unlink(tmpFile);
+  }
+
+  console.log("split tests ok");
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

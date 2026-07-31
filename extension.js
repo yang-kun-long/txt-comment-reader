@@ -9,9 +9,11 @@ const FOCUS_MODE_KEY = "txtCommentReader.focusMode";
 const LEGACY_FOCUS_MODE_KEY = "txtNovelComments.compactMode";
 const PROGRESS_PREFIX = "txtCommentReader.progress.";
 const LEGACY_PROGRESS_PREFIX = "txtNovelComments.progress.";
+const POSITION_PREFIX = "txtCommentReader.position.";
 const DEFAULT_TOKEN = "◆";
 const DEFAULT_MAX_CHARS = 48;
-
+const FILE_READ_CHUNK_SIZE = 64 * 1024;
+const ANCHOR_EVERY_SEGMENTS = 256;
 const LINE_COMMENT_PREFIX = {
   javascript: "//",
   javascriptreact: "//",
@@ -106,6 +108,8 @@ const CHAPTER_PATTERNS = [
   /^chapter\s*\d+/iu,
   /^part\s*\d+/iu,
 ];
+
+const textIndexCache = new Map();
 
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -382,6 +386,16 @@ function smartSplitLine(line, maxChars) {
   return packPieces(pieces, maxChars);
 }
 
+function getLinePieces(line, useSmartSplit, maxChars) {
+  const displayLine = line.replace(/\s+$/u, "");
+  const trimmed = displayLine.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  return useSmartSplit ? smartSplitLine(trimmed, maxChars) : [displayLine];
+}
+
 function buildTextIndex(content) {
   const rawLines = content
     .replace(/\r\n/g, "\n")
@@ -403,7 +417,7 @@ function buildTextIndex(content) {
       });
     }
 
-    const pieces = useSmartSplit ? smartSplitLine(trimmed, maxChars) : [line];
+    const pieces = getLinePieces(line, useSmartSplit, maxChars);
     segments.push(...pieces);
   }
 
@@ -427,9 +441,191 @@ async function loadTextLines(filePath) {
   return readTextLines(content);
 }
 
+async function forEachTextLine(filePath, onLine, startOffset = 0) {
+  const handle = await fs.open(filePath, "r");
+  const buffer = Buffer.allocUnsafe(FILE_READ_CHUNK_SIZE);
+  const lineParts = [];
+  let lineStartOffset = startOffset;
+  let position = startOffset;
+  let shouldContinue = true;
+
+  try {
+    while (shouldContinue) {
+      const { bytesRead } = await handle.read(buffer, 0, buffer.length, position);
+      if (bytesRead === 0) {
+        break;
+      }
+
+      let partStart = 0;
+      for (let index = 0; index < bytesRead; index += 1) {
+        if (buffer[index] !== 0x0a) {
+          continue;
+        }
+
+        if (index > partStart) {
+          lineParts.push(Buffer.from(buffer.subarray(partStart, index)));
+        }
+
+        let line = Buffer.concat(lineParts).toString("utf8");
+        if (line.endsWith("\r")) {
+          line = line.slice(0, -1);
+        }
+
+        const nextLineOffset = position + index + 1;
+        shouldContinue = (await onLine(line, lineStartOffset, nextLineOffset)) !== false;
+        lineParts.length = 0;
+        partStart = index + 1;
+        lineStartOffset = nextLineOffset;
+
+        if (!shouldContinue) {
+          break;
+        }
+      }
+
+      if (shouldContinue && partStart < bytesRead) {
+        lineParts.push(Buffer.from(buffer.subarray(partStart, bytesRead)));
+      }
+
+      position += bytesRead;
+    }
+
+    if (shouldContinue && lineParts.length > 0) {
+      const line = Buffer.concat(lineParts).toString("utf8").replace(/\r$/u, "");
+      await onLine(line, lineStartOffset, position);
+    }
+  } finally {
+    await handle.close();
+  }
+}
+
+function getTextIndexSignature(stats) {
+  return {
+    size: stats.size,
+    mtimeMs: stats.mtimeMs,
+    smartSplit: shouldSmartSplit(),
+    maxCharsPerLine: getMaxCharsPerLine(),
+  };
+}
+
+function hasSameTextIndexSignature(left, right) {
+  return (
+    left &&
+    right &&
+    left.size === right.size &&
+    left.mtimeMs === right.mtimeMs &&
+    left.smartSplit === right.smartSplit &&
+    left.maxCharsPerLine === right.maxCharsPerLine
+  );
+}
+
 async function loadTextIndex(filePath) {
-  const content = await fs.readFile(filePath, "utf8");
-  return buildTextIndex(content);
+  const stats = await fs.stat(filePath);
+  const signature = getTextIndexSignature(stats);
+  const cached = textIndexCache.get(filePath);
+  if (cached && hasSameTextIndexSignature(cached.signature, signature)) {
+    return cached;
+  }
+
+  const chapters = [];
+  const anchors = [{ segmentIndex: 0, offset: 0 }];
+  let totalSegments = 0;
+  let lastAnchorSegmentIndex = 0;
+
+  await forEachTextLine(filePath, async (line, offset) => {
+    const pieces = getLinePieces(line, signature.smartSplit, signature.maxCharsPerLine);
+    if (pieces.length === 0) {
+      return;
+    }
+
+    const trimmed = line.trim();
+    if (totalSegments - lastAnchorSegmentIndex >= ANCHOR_EVERY_SEGMENTS) {
+      anchors.push({
+        segmentIndex: totalSegments,
+        offset,
+      });
+      lastAnchorSegmentIndex = totalSegments;
+    }
+
+    if (isChapterLine(trimmed)) {
+      chapters.push({
+        title: trimmed,
+        segmentIndex: totalSegments,
+        offset,
+      });
+    }
+
+    totalSegments += pieces.length;
+  });
+
+  const index = {
+    filePath,
+    signature,
+    chapters,
+    anchors,
+    totalSegments,
+  };
+  textIndexCache.set(filePath, index);
+  return index;
+}
+
+function findNearestAnchor(anchors, segmentIndex) {
+  let left = 0;
+  let right = anchors.length - 1;
+  let result = anchors[0] || { segmentIndex: 0, offset: 0 };
+
+  while (left <= right) {
+    const middle = Math.floor((left + right) / 2);
+    const anchor = anchors[middle];
+    if (anchor.segmentIndex <= segmentIndex) {
+      result = anchor;
+      left = middle + 1;
+    } else {
+      right = middle - 1;
+    }
+  }
+
+  return result;
+}
+
+function normalizeSegmentIndex(requestedSegmentIndex, totalSegments, pageSize) {
+  if (totalSegments <= 0) {
+    return 0;
+  }
+
+  const lastPageStart = Math.floor((totalSegments - 1) / pageSize) * pageSize;
+  return Math.max(0, Math.min(lastPageStart, requestedSegmentIndex));
+}
+
+async function readSegments(filePath, startSegmentIndex, count, index) {
+  if (count <= 0 || index.totalSegments <= 0) {
+    return [];
+  }
+
+  const lines = [];
+  const anchor = findNearestAnchor(index.anchors, startSegmentIndex);
+  let currentSegmentIndex = anchor.segmentIndex;
+
+  await forEachTextLine(
+    filePath,
+    async (line) => {
+      const pieces = getLinePieces(line, index.signature.smartSplit, index.signature.maxCharsPerLine);
+      for (const piece of pieces) {
+        if (currentSegmentIndex >= startSegmentIndex && lines.length < count) {
+          lines.push(piece);
+        }
+
+        currentSegmentIndex += 1;
+        if (lines.length >= count) {
+          return false;
+        }
+      }
+
+      return true;
+    },
+    anchor.offset
+  );
+
+  return lines;
 }
 
 function createPlaceholderTreeItem(label, command) {
@@ -513,26 +709,33 @@ function getLegacyProgressKey(document, filePath) {
   return `${LEGACY_PROGRESS_PREFIX}${getProgressHash(document, filePath)}`;
 }
 
-function getSavedPage(context, document, filePath) {
+function getPositionKey(document, filePath) {
+  return `${POSITION_PREFIX}${getProgressHash(document, filePath)}`;
+}
+
+function getSavedSegmentIndex(context, document, filePath, pageSize) {
+  const savedPosition = context.workspaceState.get(getPositionKey(document, filePath));
+  if (savedPosition && Number.isInteger(savedPosition.segmentIndex)) {
+    return savedPosition.segmentIndex;
+  }
+
   const savedPage = context.workspaceState.get(getProgressKey(document, filePath));
   if (Number.isInteger(savedPage)) {
-    return savedPage;
+    return savedPage * pageSize;
   }
 
   const legacySavedPage = context.workspaceState.get(getLegacyProgressKey(document, filePath));
-  return Number.isInteger(legacySavedPage) ? legacySavedPage : 0;
+  return Number.isInteger(legacySavedPage) ? legacySavedPage * pageSize : 0;
 }
 
-async function setSavedPage(context, document, filePath, page) {
-  await context.workspaceState.update(getProgressKey(document, filePath), page);
+async function setSavedSegmentIndex(context, document, filePath, segmentIndex) {
+  await context.workspaceState.update(getPositionKey(document, filePath), {
+    segmentIndex,
+    updatedAt: Date.now(),
+  });
 }
 
-function getChapterPage(chapter, markersLength) {
-  return Math.floor(chapter.segmentIndex / markersLength);
-}
-
-function getChapterIndexForPage(chapters, page, markersLength) {
-  const segmentIndex = page * markersLength;
+function getChapterIndexForSegmentIndex(chapters, segmentIndex) {
   let chapterIndex = -1;
 
   for (let index = 0; index < chapters.length; index += 1) {
@@ -556,7 +759,7 @@ async function replaceMarkerLines(editor, markers, style, token, pageLines) {
   });
 }
 
-async function renderPage(context, requestedPage, visibleContent = true) {
+async function renderPage(context, requestedSegmentIndex, visibleContent = true) {
   const editor = getActiveEditor();
   if (!editor) {
     return;
@@ -577,16 +780,20 @@ async function renderPage(context, requestedPage, visibleContent = true) {
   }
 
   const textIndex = await loadTextIndex(state.filePath);
-  const textLines = textIndex.segments;
-  if (textLines.length === 0) {
+  if (textIndex.totalSegments === 0) {
     vscode.window.showInformationMessage("txt 文件没有可显示的非空行。");
     return;
   }
 
-  const totalPages = Math.max(1, Math.ceil(textLines.length / markers.length));
-  const nextPage = Math.max(0, Math.min(totalPages - 1, requestedPage));
-  const start = nextPage * markers.length;
-  const pageLines = visibleContent ? textLines.slice(start, start + markers.length) : markers.map(() => "");
+  const totalPages = Math.max(1, Math.ceil(textIndex.totalSegments / markers.length));
+  const targetSegmentIndex = Number.isInteger(requestedSegmentIndex)
+    ? requestedSegmentIndex
+    : getSavedSegmentIndex(context, editor.document, state.filePath, markers.length);
+  const nextSegmentIndex = normalizeSegmentIndex(targetSegmentIndex, textIndex.totalSegments, markers.length);
+  const pageNumber = Math.floor(nextSegmentIndex / markers.length) + 1;
+  const pageLines = visibleContent
+    ? await readSegments(state.filePath, nextSegmentIndex, markers.length, textIndex)
+    : markers.map(() => "");
   const ok = await replaceMarkerLines(editor, markers, style, token, pageLines);
 
   if (!ok) {
@@ -594,14 +801,14 @@ async function renderPage(context, requestedPage, visibleContent = true) {
     return;
   }
 
-  await setSavedPage(context, editor.document, state.filePath, nextPage);
+  await setSavedSegmentIndex(context, editor.document, state.filePath, nextSegmentIndex);
   await setState(context, {
     totalPages,
     targetLines: markers.length,
   });
   vscode.window.setStatusBarMessage(
     visibleContent
-      ? `TXT Comment Reader: ${nextPage + 1}/${totalPages} 页，${markers.length} 行`
+      ? `TXT Comment Reader: ${pageNumber}/${totalPages} 页，${markers.length} 行`
       : `TXT Comment Reader: 已清空目标注释行内容`,
     2500
   );
@@ -634,7 +841,7 @@ async function openText(context, chapterTreeProvider) {
     filePath,
   });
   chapterTreeProvider.refresh();
-  await renderPage(context, getSavedPage(context, editor.document, filePath), !getFocusMode(context));
+  await renderPage(context, undefined, !getFocusMode(context));
 }
 
 async function reopenLast(context) {
@@ -649,7 +856,7 @@ async function reopenLast(context) {
     return;
   }
 
-  await renderPage(context, getSavedPage(context, editor.document, state.filePath), !getFocusMode(context));
+  await renderPage(context, undefined, !getFocusMode(context));
 }
 
 async function openChapter(context, chapterIndex) {
@@ -679,8 +886,7 @@ async function openChapter(context, chapterIndex) {
     return;
   }
 
-  const page = getChapterPage(chapter, markers.length);
-  await renderPage(context, page, !getFocusMode(context));
+  await renderPage(context, chapter.segmentIndex, !getFocusMode(context));
 }
 
 async function openPreviousChapter(context) {
@@ -704,16 +910,15 @@ async function openPreviousChapter(context) {
   }
 
   const textIndex = await loadTextIndex(state.filePath);
-  const currentPage = getSavedPage(context, editor.document, state.filePath);
-  const currentChapterIndex = getChapterIndexForPage(textIndex.chapters, currentPage, markers.length);
+  const currentSegmentIndex = getSavedSegmentIndex(context, editor.document, state.filePath, markers.length);
+  const currentChapterIndex = getChapterIndexForSegmentIndex(textIndex.chapters, currentSegmentIndex);
   if (currentChapterIndex <= 0) {
     vscode.window.showInformationMessage("已经是第一章。");
     return;
   }
 
   const chapter = textIndex.chapters[currentChapterIndex - 1];
-  const page = getChapterPage(chapter, markers.length);
-  await renderPage(context, page, !getFocusMode(context));
+  await renderPage(context, chapter.segmentIndex, !getFocusMode(context));
 }
 
 async function openNextChapter(context) {
@@ -737,8 +942,8 @@ async function openNextChapter(context) {
   }
 
   const textIndex = await loadTextIndex(state.filePath);
-  const currentPage = getSavedPage(context, editor.document, state.filePath);
-  const currentChapterIndex = getChapterIndexForPage(textIndex.chapters, currentPage, markers.length);
+  const currentSegmentIndex = getSavedSegmentIndex(context, editor.document, state.filePath, markers.length);
+  const currentChapterIndex = getChapterIndexForSegmentIndex(textIndex.chapters, currentSegmentIndex);
   const nextChapterIndex = currentChapterIndex < 0 ? 0 : currentChapterIndex + 1;
   if (nextChapterIndex >= textIndex.chapters.length) {
     vscode.window.showInformationMessage("已经是最后一章。");
@@ -746,8 +951,7 @@ async function openNextChapter(context) {
   }
 
   const chapter = textIndex.chapters[nextChapterIndex];
-  const page = getChapterPage(chapter, markers.length);
-  await renderPage(context, page, !getFocusMode(context));
+  await renderPage(context, chapter.segmentIndex, !getFocusMode(context));
 }
 
 async function showChapters(context, chapterTreeProvider, statusBar) {
@@ -758,7 +962,7 @@ async function showChapters(context, chapterTreeProvider, statusBar) {
     const state = getState(context);
     const editor = vscode.window.activeTextEditor;
     if (editor && state.filePath) {
-      await renderPage(context, getSavedPage(context, editor.document, state.filePath), true);
+      await renderPage(context, undefined, true);
     }
   }
 
@@ -779,7 +983,16 @@ async function nextPage(context) {
     return;
   }
 
-  await renderPage(context, getSavedPage(context, editor.document, state.filePath) + 1, !getFocusMode(context));
+  const token = getConfiguredToken();
+  const style = getCommentStyle(editor.document);
+  const markers = findMarkerLines(editor.document, style, token);
+  if (markers.length === 0) {
+    await renderPage(context, 0, !getFocusMode(context));
+    return;
+  }
+
+  const savedSegmentIndex = getSavedSegmentIndex(context, editor.document, state.filePath, markers.length);
+  await renderPage(context, savedSegmentIndex + markers.length, !getFocusMode(context));
 }
 
 async function prevPage(context) {
@@ -790,7 +1003,16 @@ async function prevPage(context) {
     return;
   }
 
-  await renderPage(context, getSavedPage(context, editor.document, state.filePath) - 1, !getFocusMode(context));
+  const token = getConfiguredToken();
+  const style = getCommentStyle(editor.document);
+  const markers = findMarkerLines(editor.document, style, token);
+  if (markers.length === 0) {
+    await renderPage(context, 0, !getFocusMode(context));
+    return;
+  }
+
+  const savedSegmentIndex = getSavedSegmentIndex(context, editor.document, state.filePath, markers.length);
+  await renderPage(context, savedSegmentIndex - markers.length, !getFocusMode(context));
 }
 
 async function toggleFocusMode(context, chapterTreeProvider, statusBarItems) {
@@ -805,7 +1027,7 @@ async function toggleFocusMode(context, chapterTreeProvider, statusBarItems) {
     return;
   }
 
-  await renderPage(context, getSavedPage(context, editor.document, state.filePath), !nextMode);
+  await renderPage(context, undefined, !nextMode);
 }
 
 async function setToken(context) {
@@ -971,10 +1193,14 @@ module.exports = {
   deactivate,
   _test: {
     buildTextIndex,
+    getChapterIndexForSegmentIndex,
     hardSplit,
     isChapterLine,
+    loadTextIndex,
+    normalizeSegmentIndex,
     packPieces,
     readTextLines,
+    readSegments,
     smartSplitLine,
     splitByPattern,
   },
